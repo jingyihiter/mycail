@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PublishConfigData" serverName="Copy of project-level server 'server160'">
+    <serverData>
+      <paths name="6195">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/jyma/mycail" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="6195 (1)">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/jyma/mycail" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="Copy of project-level server '6107'">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/mjy/mycail" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="Copy of project-level server 'server160'">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/cail/mycail" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+    </serverData>
+  </component>
+</project>

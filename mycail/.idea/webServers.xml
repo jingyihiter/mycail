@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="ab2f55c0-6bed-4bc0-b2d0-39c7e5689aea" name="6195" url="http://202.118.229.11">
+        <fileTransfer host="202.118.229.11" port="6195" accessType="SFTP">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" />
+          </advancedOptions>
+          <option name="port" value="6195" />
+        </fileTransfer>
+      </webServer>
+      <webServer id="804bed96-e26d-452a-bb02-b65a343e3f3c" name="6195 (1)" url="http://202.118.229.11">
+        <fileTransfer host="202.118.229.11" port="6195" accessType="SFTP">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" />
+          </advancedOptions>
+          <option name="port" value="6195" />
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>
