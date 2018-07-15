@@ -23,7 +23,7 @@ This module implements the reading comprehension models based on:
 2. the Match-LSTM algorithm described in https://openreview.net/pdf?id=B1-q5Pqxl
 Note that we use Pointer Network for the decoding stage of both models.
 """
-
+import sys
 import os
 import time
 import logging
@@ -32,13 +32,16 @@ import pickle
 import numpy as np
 import tensorflow as tf
 import keras.backend as K
-from utils import compute_bleu_rouge
-from utils import normalize
-from layers.basic_rnn import rnn, cudnn_rnn, bilstm, bilstm_layer
-from layers.match_layer import MatchLSTMLayer
-from layers.match_layer import AttentionFlowMatchLayer
-from layers.pointer_net import PointerNetDecoder
 
+os.sys.path.append(os.path.join(os.path.dirname(__file__),'../../'))
+
+from tfcode.model_v1.utils import compute_bleu_rouge
+from tfcode.model_v1.utils import normalize
+from tfcode.model_v1.utils.judger import Judger
+from tfcode.layers.basic_rnn import rnn, cudnn_rnn, bilstm, bilstm_layer
+from tfcode.layers.match_layer import MatchLSTMLayer
+from tfcode.layers.match_layer import AttentionFlowMatchLayer
+from tfcode.layers.pointer_net import PointerNetDecoder
 
 class RCModel(object):
     """
@@ -52,6 +55,7 @@ class RCModel(object):
 
         # basic config
         self.algo = args.algo
+        self.batch_size = args.batch_size
         self.hidden_size = args.hidden_size
         self.optim_type = args.optim
         self.learning_rate = args.learning_rate
@@ -63,10 +67,15 @@ class RCModel(object):
         self.max_p_len = args.max_p_len
         self.max_q_len = args.max_q_len
         self.max_a_len = args.max_a_len
-
+        self.accu_passage = self._load_common_passage(args.accu_passage_path)
+        self.accu_seg_dict = self._load_accu_dict(args.accu_seg_dict_path)
         # the vocab
         self.vocab = vocab
         self.accu_dict = self._load_accu_dict(args.accu_dict_path)
+
+        # path
+        self.accu_path = args.accu_txt_path
+        self.law_path = args.law_txt_path
 
         # session info
         sess_config = tf.ConfigProto()
@@ -135,8 +144,10 @@ class RCModel(object):
 
         with tf.variable_scope('passage_encoding'):
             self.sep_p_encodes, _ = bilstm_layer(self.p_emb, self.p_length, self.hidden_size)
+            # self.sep_p_encodes, _ = rnn('bi-lstm',self.p_emb, self.p_length, self.hidden_size)
         with tf.variable_scope('question_encoding'):
             self.sep_q_encodes, _ = bilstm_layer(self.q_emb, self.q_length, self.hidden_size)
+            # self.sep_q_encodes, _ = rnn('bi-lstm', self.q_emb, self.q_length, self.hidden_size)
 
     def _match(self):
         """
@@ -156,41 +167,43 @@ class RCModel(object):
         """
         Employs Bi-LSTM again to fuse the context information after match layer
         """
-        with tf.variable_scope('fusion'):
-            self.match_p_encodes = tf.layers.dense(self.match_p_encodes, self.hidden_size * 2,
-                                                   activation=tf.nn.relu)
 
-            self.residual_p_emb = self.match_p_encodes
-            if self.use_dropout:
-                self.residual_p_emb = tf.nn.dropout(self.match_p_encodes, self.dropout_keep_prob)
+        self.match_p_encodes = tf.layers.dense(self.match_p_encodes, self.hidden_size * 2,
+                                               activation=tf.nn.relu)
 
-            self.residual_p_encodes, _ = bilstm_layer(self.residual_p_emb, self.p_length,
-                                                      self.hidden_size, layer_num=1)
-            if self.use_dropout:
-                self.residual_p_encodes = tf.nn.dropout(self.residual_p_encodes, self.dropout_keep_prob)
-            # bilstm不能直接连接dense AttributeError: 'Bidirectional' object has no attribute 'outbound_nodes'
-            sim_weight_1 = tf.get_variable("sim_weight_1", self.hidden_size * 2)
-            weight_passage_encodes = self.residual_p_encodes * sim_weight_1
-            dot_sim_matrix = tf.matmul(weight_passage_encodes, self.residual_p_encodes, transpose_b=True)
-            sim_weight_2 = tf.get_variable("sim_weight_2", self.hidden_size * 2)
-            passage_sim = tf.tensordot(self.residual_p_encodes, sim_weight_2, axes=[[2], [0]])
-            sim_weight_3 = tf.get_variable("sim_weight_3", self.hidden_size * 2)
-            question_sim = tf.tensordot(self.residual_p_encodes, sim_weight_3, axes=[[2], [0]])
-            sim_matrix = dot_sim_matrix + tf.expand_dims(passage_sim, 2) + tf.expand_dims(question_sim, 1)
-            # sim_matrix = tf.matmul(self.residual_p_encodes, self.residual_p_encodes, transpose_b=True)
+        self.residual_p_emb = self.match_p_encodes
+        if self.use_dropout:
+            self.residual_p_emb = tf.nn.dropout(self.match_p_encodes, self.dropout_keep_prob)
 
-            batch_size, num_rows = tf.shape(sim_matrix)[0:1], tf.shape(sim_matrix)[1]
-            mask = tf.eye(num_rows, batch_shape=batch_size)
-            sim_matrix = sim_matrix + -1e9 * mask
+        self.residual_p_encodes, _ = bilstm_layer(self.residual_p_emb, self.p_length,
+                                                  self.hidden_size, layer_num=1)
+        # self.residual_p_encodes, _ = rnn('bi-lstm',self.residual_p_emb, self.p_length,
+        #                                           self.hidden_size, layer_num=1)
+        if self.use_dropout:
+            self.residual_p_encodes = tf.nn.dropout(self.residual_p_encodes, self.dropout_keep_prob)
+        # bilstm不能直接连接dense AttributeError: 'Bidirectional' object has no attribute 'outbound_nodes'
+        sim_weight_1 = tf.get_variable("sim_weight_1", self.hidden_size * 2)
+        weight_passage_encodes = self.residual_p_encodes * sim_weight_1
+        dot_sim_matrix = tf.matmul(weight_passage_encodes, self.residual_p_encodes, transpose_b=True)
+        sim_weight_2 = tf.get_variable("sim_weight_2", self.hidden_size * 2)
+        passage_sim = tf.tensordot(self.residual_p_encodes, sim_weight_2, axes=[[2], [0]])
+        sim_weight_3 = tf.get_variable("sim_weight_3", self.hidden_size * 2)
+        question_sim = tf.tensordot(self.residual_p_encodes, sim_weight_3, axes=[[2], [0]])
+        sim_matrix = dot_sim_matrix + tf.expand_dims(passage_sim, 2) + tf.expand_dims(question_sim, 1)
+        # sim_matrix = tf.matmul(self.residual_p_encodes, self.residual_p_encodes, transpose_b=True)
 
-            context2question_attn = tf.matmul(tf.nn.softmax(sim_matrix, -1), self.residual_p_encodes)
-            concat_outputs = tf.concat([self.residual_p_encodes, context2question_attn,
-                                        self.residual_p_encodes * context2question_attn], -1)
-            self.residual_match_p_encodes = tf.layers.dense(concat_outputs, self.hidden_size * 2, activation=tf.nn.relu)
+        batch_size, num_rows = tf.shape(sim_matrix)[0:1], tf.shape(sim_matrix)[1]
+        mask = tf.eye(num_rows, batch_shape=batch_size)
+        sim_matrix = sim_matrix + -1e9 * mask
 
-            self.match_p_encodes = tf.add(self.match_p_encodes, self.residual_match_p_encodes)
-            if self.use_dropout:
-                self.match_p_encodes = tf.nn.dropout(self.match_p_encodes, self.dropout_keep_prob)
+        context2question_attn = tf.matmul(tf.nn.softmax(sim_matrix, -1), self.residual_p_encodes)
+        concat_outputs = tf.concat([self.residual_p_encodes, context2question_attn,
+                                    self.residual_p_encodes * context2question_attn], -1)
+        self.residual_match_p_encodes = tf.layers.dense(concat_outputs, self.hidden_size * 2, activation=tf.nn.relu)
+
+        self.match_p_encodes = tf.add(self.match_p_encodes, self.residual_match_p_encodes)
+        if self.use_dropout:
+            self.match_p_encodes = tf.nn.dropout(self.match_p_encodes, self.dropout_keep_prob)
 
     def _decode(self):
         """
@@ -202,6 +215,8 @@ class RCModel(object):
         with tf.variable_scope('start_pos_predict'):
             self.fuse_p_encodes, _ = bilstm_layer(self.match_p_encodes, self.p_length,
                                                   self.hidden_size, layer_num=1)
+            # self.fuse_p_encodes, _ = rnn('bi-lstm',self.match_p_encodes, self.p_length,
+            #                                       self.hidden_size, layer_num=1)
             start_weight = tf.get_variable("start_weight", self.hidden_size * 2)
             start_logits = tf.tensordot(self.fuse_p_encodes, start_weight, axes=[[2], [0]])
 
@@ -209,18 +224,22 @@ class RCModel(object):
             concat_GM_2 = tf.concat([self.match_p_encodes, self.fuse_p_encodes], -1)
             self.end_p_encodes, _ = bilstm_layer(concat_GM_2, self.p_length,
                                                  self.hidden_size, layer_num=1)
+            # self.end_p_encodes, _ = rnn('bi-lstm',concat_GM_2, self.p_length,
+            #                                      self.hidden_size, layer_num=1)
 
             end_weight = tf.get_variable("start_weight", self.hidden_size * 2)
             end_logits = tf.tensordot(self.end_p_encodes, end_weight, axes=[[2], [0]])
 
-        with tf.variable_scope('same_question_concat'):
-            batch_size = tf.shape(self.start_label)[0]
+        with tf.variable_scope('same_question_concat'): # 为什么
+            batch_size = tf.shape(self.q_length)[0]
+            if batch_size!=0:
+                concat_start_logits = tf.reshape(start_logits, [batch_size, -1])
+                concat_end_logits = tf.reshape(end_logits, [batch_size, -1])
+            else:
+                raise  ValueError("batch size is zero Error!")
 
-            concat_start_logits = tf.reshape(start_logits, [batch_size, -1])
-            concat_end_logits = tf.reshape(end_logits, [batch_size, -1])
-
-        self.start_probs = tf.nn.softmax(concat_start_logits, axis=1)
-        self.end_probs = tf.nn.softmax(concat_end_logits, axis=1)
+        self.start_probs = tf.nn.softmax(start_logits, axis=1) # start_logits [batch,895]
+        self.end_probs = tf.nn.softmax(end_logits, axis=1)
 
     def _compute_loss(self):
         """
@@ -271,7 +290,7 @@ class RCModel(object):
             dropout_keep_prob: float value indicating dropout keep probability
         """
         total_num, total_loss = 0, 0
-        log_every_n_batch, n_batch_loss = 50, 0  # TODO50——>200
+        log_every_n_batch, n_batch_loss = 200, 0  # TODO50——>200
         for bitx, batch in enumerate(train_batches, 1):
             feed_dict = {self.p: batch['passage_token_ids'],
                          self.q: batch['question_token_ids'],
@@ -280,7 +299,7 @@ class RCModel(object):
                          self.start_label: batch['start_id'],
                          self.end_label: batch['end_id'],
                          self.dropout_keep_prob: dropout_keep_prob}
-            _, loss = self.sess.run([tf.shape(self.sep_p_encodes), tf.shape(self.sep_q_encodes)], feed_dict)
+            # _, loss = self.sess.run([tf.shape(self.sep_p_encodes), tf.shape(self.sep_q_encodes)], feed_dict)
             _, loss = self.sess.run([self.train_op, self.loss], feed_dict)
             total_loss += loss * len(batch['raw_data'])
             total_num += len(batch['raw_data'])
@@ -306,7 +325,8 @@ class RCModel(object):
         """
         pad_id = self.vocab.get_id(self.vocab.pad_token)
         # max_bleu_4 = 0
-        max_rougeL = 0  # Rouge-L is the main eval metric
+        # max_rougeL = 0  # Rouge-L is the main eval metric
+        max_fscore = 0
         for epoch in range(1, epochs + 1):
             self.logger.info('Training the model for epoch {}'.format(epoch))
             train_batches = data.gen_mini_batches('train', batch_size, pad_id, shuffle=True)
@@ -317,17 +337,16 @@ class RCModel(object):
                 self.logger.info('Evaluating the model after epoch {}'.format(epoch))
                 if data.dev_set is not None:
                     eval_batches = data.gen_mini_batches('dev', batch_size, pad_id, shuffle=False)
-                    eval_loss, bleu_rouge = self.evaluate(eval_batches)
+                    eval_loss, fscore = self.evaluate(eval_batches)
                     self.logger.info('Dev eval loss {}'.format(eval_loss))
-                    self.logger.info('Dev eval result: {}'.format(bleu_rouge))
-
+                    self.logger.info("Dev eval result => accu_avg_f1:{} accu_macro_f1:{} accu_micro_f1:{}\n => articles_avg_f1:{} articles_macro_f1:{} articles_micro_f1:{} \n => imprisonment_score:{}".format(fscore[0][0], fscore[0][1], fscore[0][2], fscore[1][0], fscore[1][1], fscore[1][2], fscore[2]))
                     # if bleu_rouge['Bleu-4'] > max_bleu_4:
                     #     self.save(save_dir, save_prefix)
                     #     max_bleu_4 = bleu_rouge['Bleu-4']
 
-                    if bleu_rouge['Rouge-L'] > max_rougeL:
-                        self.save(save_dir, save_prefix)
-                        max_rougeL = bleu_rouge['Rouge-L']
+                    if fscore[0][0] > max_fscore:
+                        self.save(save_dir, save_prefix, epoch)
+                        max_fscore = fscore[0][0]
                 else:
                     self.logger.warning('No dev set is loaded for evaluation in the dataset!')
             else:
@@ -353,23 +372,22 @@ class RCModel(object):
                          self.start_label: batch['start_id'],
                          self.end_label: batch['end_id'],
                          self.dropout_keep_prob: 1.0}
-            # print(self.sess.run([tf.shape(self.match_p_encodes)], feed_dict))
-            start_probs, end_probs, loss = self.sess.run([self.start_probs,
-                                                          self.end_probs, self.loss], feed_dict)
+            start_probs, end_probs, loss = self.sess.run([self.start_probs,  self.end_probs, self.loss], feed_dict)
 
             total_loss += loss * len(batch['raw_data'])
             total_num += len(batch['raw_data'])
 
             padded_p_len = len(batch['passage_token_ids'][0])
             for sample, start_prob, end_prob in zip(batch['raw_data'], start_probs, end_probs):
-                best_answer = self.find_best_answer(sample, start_prob, end_prob, padded_p_len) # 截取出预测的罪行
+                best_answer, best_label = self.find_best_answer(sample, start_prob, end_prob, padded_p_len) # 截取出预测的罪行
                 if save_full_info:
-                    sample['pred_accu'] = [best_answer]
+                    sample['pred_accu'] = best_answer
+                    sample['pred_label'] = [best_label]
+                    sample['truth_accu'] = self.accu_dict[sample['accu_label'][0]]
                     pred_answers.append(sample)
                 else:
-                    pred_answers.append({'para_id': sample['para_id'],
-                                         'pred_accu': [best_answer],
-                                         'accu_label': sample["accu_label"]})
+                    pred_answers.append({'para_id': sample['para_id'],'pred_accu': best_answer,
+                                         'pred_label':[best_label], 'truth_accu': self.accu_dict[sample["accu_label"][0]]})
 
         if result_dir is not None and result_prefix is not None:
             result_file = os.path.join(result_dir, result_prefix + '.json')
@@ -381,17 +399,41 @@ class RCModel(object):
 
         # this average loss is invalid on test set, since we don't have true start_id and end_id
         ave_loss = 1.0 * total_loss / total_num
-        # compute the bleu and rouge scores if reference answers is provided
+        # formate
+        truth_dict, predict_dict = {},{}
+        for pred in pred_answers:
+            para_id = int(pred['para_id'])
+            truth_dict[para_id]={"accusation":[pred['truth_accu']],"relevant_articles":[184],"term_of_imprisonment": {
+                                "life_imprisonment": False, "imprisonment": 12, "death_penalty": False}}
+            predict_dict[para_id]={"accusation":pred['pred_label'],"articles":[184],"imprisonment":12}
+            # print(truth_dict[para_id])
+            # print(predict_dict[para_id])
+            # raise ValueError("error")
+        jd = Judger(self.accu_path, self.law_path)
+        f_score = jd.evalute(truth_dict, predict_dict)
+        return ave_loss,f_score
 
-        pred_dict, ref_dict = {}, {}
-        for pred in zip(pred_answers):
-            question_id = pred['para_id']
-            if len(pred['accu_label']) > 0:
-                pred_dict[question_id] = normalize(pred['pred_accu'])
-                ref_dict[question_id] = normalize(self.accu_dict[pred["accu_label"]])
-        bleu_rouge = compute_bleu_rouge(pred_dict, ref_dict)
+    def predict(self, batch_data, vocab):
+        """
+        content means a batch data
+        :return:predict tha accu of each data
+        """
+        result = [] # save the predict accu label
+        feed_dict = {self.p: batch_data['passage_token_ids'],
+                     self.q: batch_data['question_token_ids'],
+                     self.p_length: batch_data['passage_length'],
+                     self.q_length: batch_data['question_length'],
+                     self.start_label: batch_data['start_id'],
+                     self.end_label: batch_data['end_id'],
+                     self.dropout_keep_prob: 1.0}
+        start_probs, end_probs = self.sess.run([self.start_probs,
+                                                      self.end_probs], feed_dict)
+        padded_p_len = len(batch_data['passage_token_ids'][0])
+        for start_prob, end_prob in zip(start_probs, end_probs):
+            _, best_label = self.find_best_answer(sample=None, start_prob=start_prob, end_prob=end_prob, padded_p_len=padded_p_len)
+            result.append([best_label])
+        return result
 
-        return ave_loss, bleu_rouge
 
     def _load_accu_dict(self, accu_dict_path):
         accu2label = dict()
@@ -401,18 +443,38 @@ class RCModel(object):
         label2accu = {value:key for key, value in accu2label.items()}
         return label2accu
 
+    def _load_common_passage(self, path):
+        """
+        Load accu seq as common passage
+        :return:
+        """
+        with open(path,"rb") as f:
+            return pickle.load(f)
+
     def find_best_answer(self, sample, start_prob, end_prob, padded_p_len):
         """
         Finds the best answer for a sample given start_prob and end_prob for each position.
         This will call find_best_answer_for_passage because there are multiple passages in a sample
         """
         best_p_idx, best_span, best_score = None, None, 0
-        passage_len = min(self.max_p_len, len(sample['passage_tokens']))
+        passage_len = self.max_p_len
         answer_span, best_score = self.find_best_answer_for_passage(start_prob, end_prob,  passage_len)
         best_span = answer_span
         best_answer = ''.join(
-            sample['passage_tokens'][best_span[0]: best_span[1] + 1])
-        return best_answer
+            self.accu_passage[best_span[0]: best_span[1] + 1])
+        best_answer_ls = self.accu_passage[best_span[0]:best_span[1]+1]
+        # 与对应罪行重合词数比率最高的为正确选项
+        best_label = 192 # 默认取最大
+        max_overlap_ratio=0
+        for key,value in self.accu_seg_dict.items():
+            accu_value = value.split(' ')
+            found = set()
+            [found.add(word) for word in best_answer_ls if word in accu_value]
+            overlap_ratio = len(found)/len(accu_value)
+            if overlap_ratio>max_overlap_ratio:
+                max_overlap_ratio = overlap_ratio
+                best_label = key
+        return best_answer, best_label
 
     def find_best_answer_for_passage(self, start_probs, end_probs, passage_len=None):
         """
@@ -435,16 +497,17 @@ class RCModel(object):
                     max_prob = prob
         return (best_start, best_end), max_prob
 
-    def save(self, model_dir, model_prefix):
+
+    def save(self, model_dir, model_prefix, epoch):
         """
         Saves the model into model_dir with model_prefix as the model indicator
         """
-        self.saver.save(self.sess, os.path.join(model_dir, model_prefix))
+        self.saver.save(self.sess, os.path.join(model_dir, model_prefix), global_step=epoch)
         self.logger.info('Model saved in {}, with prefix {}.'.format(model_dir, model_prefix))
 
     def restore(self, model_dir, model_prefix):
         """
         Restores the model into model_dir from model_prefix as the model indicator
         """
-        self.saver.restore(self.sess, os.path.join(model_dir, model_prefix))
+        self.saver.restore(self.sess, tf.train.latest_checkpoint(model_dir))
         self.logger.info('Model restored from {}, with prefix {}'.format(model_dir, model_prefix))

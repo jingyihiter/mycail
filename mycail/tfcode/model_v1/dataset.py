@@ -44,17 +44,17 @@ class BRCDataset(object):
         if train_files:
             for train_file in train_files:
                 self.train_set += self._load_dataset(train_file, train=True)
-            self.logger.info('Train set size: {} questions.'.format(len(self.train_set)))
+            self.logger.info('Train set size: {} passages.'.format(len(self.train_set)))
 
         if dev_files:
             for dev_file in dev_files:
                 self.dev_set += self._load_dataset(dev_file)
-            self.logger.info('Dev set size: {} questions.'.format(len(self.dev_set)))
+            self.logger.info('Dev set size: {} passages.'.format(len(self.dev_set)))
 
         if test_files:
             for test_file in test_files:
                 self.test_set += self._load_dataset(test_file)
-            self.logger.info('Test set size: {} questions.'.format(len(self.test_set)))
+            self.logger.info('Test set size: {} passages.'.format(len(self.test_set)))
 
     def _load_common_passage(self):
         """
@@ -80,7 +80,7 @@ class BRCDataset(object):
                     if sample['accu_span'][0][1] >= self.max_p_len: # 结束位置大于最大长度
                         continue
                 data_set.append(sample)
-        print(data_path, len(data_set))
+        # print(data_path, len(data_set))
         return data_set
 
     def _one_mini_batch(self, data, indices, pad_id):
@@ -189,3 +189,30 @@ class BRCDataset(object):
         for batch_start in np.arange(0, data_size, batch_size):
             batch_indices = indices[batch_start: batch_start + batch_size]
             yield self._one_mini_batch(data, batch_indices, pad_id)
+
+    def trans_to_batch_data(self, content, vocab, pad_id):
+        """
+        trans the original data to one batch data for model
+        :param content:a list of facts
+        :param vocab:the vocab of this data
+        :param pad_id:the padding token id
+        :return: standard batch data
+        """
+        batch_data = {'raw_data':[],
+                      'question_token_ids':[],
+                      'question_length':[],
+                      'passage_token_ids':[],
+                      'passage_length':[],
+                      'start_id':[],
+                      'end_id':[]
+                      }
+        for fact in content:
+            question_token_id = vocab.convert_to_ids(fact)
+            passage_token_id = vocab.convert_to_ids(self.common_passage)
+            batch_data['question_token_ids'].append(question_token_id)
+            batch_data['passage_token_ids'].append(passage_token_id)
+            batch_data['question_length'].append(min(len(question_token_id), self.max_q_len))
+            batch_data['passage_length'].append(len(passage_token_id))
+        batch_data, padded_q_len = self._dynamic_padding(batch_data, pad_id)
+        return  batch_data
+

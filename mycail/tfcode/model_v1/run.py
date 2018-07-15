@@ -22,16 +22,18 @@ import sys
 if sys.version[0] == '2':
     reload(sys)
     sys.setdefaultencoding("utf-8")
-sys.path.append('..')
+sys.path.append('../')
 import os
+os.sys.path.append(os.path.join(os.path.dirname(__file__),'../../'))
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 import pickle
+import gzip
 import argparse
 import logging
-from dataset import BRCDataset
-from vocab import Vocab
-from rc_model import RCModel
+from tfcode.model_v1.dataset import BRCDataset
+from tfcode.model_v1.vocab import Vocab
+from tfcode.model_v1.rc_model import RCModel
 
 
 def parse_args():
@@ -59,9 +61,9 @@ def parse_args():
                                 help='weight decay')
     train_settings.add_argument('--dropout_keep_prob', type=float, default=1,  #
                                 help='dropout keep rate')
-    train_settings.add_argument('--batch_size', type=int, default=200,
+    train_settings.add_argument('--batch_size', type=int, default=128,
                                 help='train batch size')
-    train_settings.add_argument('--epochs', type=int, default=10,
+    train_settings.add_argument('--epochs', type=int, default=5,
                                 help='train epochs')
     train_settings.add_argument('--restore', action='store_true',
                                 help='restore the training')
@@ -75,37 +77,45 @@ def parse_args():
                                 help='size of LSTM hidden units')
     model_settings.add_argument('--max_p_num', type=int, default=1,
                                 help='max passage num in one sample')
-    model_settings.add_argument('--max_p_len', type=int, default=895,
+    model_settings.add_argument('--max_p_len', type=int, default=895, # 总长度为895 # 5个是15  25个是70
                                 help='max length of passage')
-    model_settings.add_argument('--max_q_len', type=int, default=600,
+    model_settings.add_argument('--max_q_len', type=int, default=500,
                                 help='max length of question')
     model_settings.add_argument('--max_a_len', type=int, default=10,
                                 help='max length of answer')
 
     path_settings = parser.add_argument_group('path settings')
     path_settings.add_argument('--train_files', nargs='+',
-                               default=['../../data/segdata3/data_train.json'],
+                               default=['../../data/ltp_segdata/data_train.json'],
                                help='list of files that contain the preprocessed train data')
+
     path_settings.add_argument('--dev_files', nargs='+',
-                               default=['../../data/segdata3/data_valid.json'],
+                               default=['../../data/ltp_segdata/data_test.json'],
                                help='list of files that contain the preprocessed dev data')
 
     path_settings.add_argument('--test_files', nargs='+',
-                               default=['../../data/segdata3/data_test.json'],
+                               default=['../../data/ltp_segdata/data_test.json'],
                                help='list of files that contain the preprocessed test data')
 
     path_settings.add_argument('--brc_dir', default='../../data/baidu',
                                help='the dir with preprocessed baidu reading comprehension data')
 
-    path_settings.add_argument('--embedding_path', default='../../data/all_vectors.txt',  # TODO!!
+    path_settings.add_argument('--embedding_path', default='../../data/Vectors.txt',  # TODO!!
                                help='the path to save vocabulary')
 
-    path_settings.add_argument('--vocab_path', default='../../data/full.glove.vocab.data',  # TODO!!
+    path_settings.add_argument('--vocab_path', default='../../data/vocab.txt',  # TODO!!
                                help='the path to save vocabulary')
+
     path_settings.add_argument('--accu_dict_path', default='../../data/accu_dict.pkl',
                                help="accu dict path ")
-    path_settings.add_argument('--accu_passage_path', default='../../data/accu_passage.pkl',
+    path_settings.add_argument("--accu_seg_dict_path", default='../../data/accu_seg_dict.pkl',
+                               help="accu seg dict path")
+
+    path_settings.add_argument('--accu_passage_path', default='../../data/accu_passage.pkl', #只有最多的五个的
                                help='the path to save accu passage')
+
+    path_settings.add_argument('--accu_txt_path', default='../../data/accu.txt', help='accu.txt path')
+    path_settings.add_argument('--law_txt_path', default='../../data/law.txt', help='law.txt path')
 
     path_settings.add_argument('--run_id', default='0',
                                help='Run ID [0]')
@@ -136,12 +146,14 @@ def prepare(args):
     logger.info('Building vocabulary...')
     brc_data = BRCDataset(args.max_p_num, args.max_p_len, args.max_q_len, args.accu_passage_path,
                           args.train_files, args.dev_files, args.test_files)
+
     vocab = Vocab(lower=True)
     # for word in brc_data.word_iter('train'):  # 构建词典只包含训练集
     #     vocab.add(word)
-    #
+    # for word in brc_data.word_iter('dev'):  # 构建词典只包含验证集
+    #     vocab.add(word)
     # unfiltered_vocab_size = vocab.size()
-    # vocab.filter_tokens_by_cnt(min_cnt=2)
+    # vocab.filter_tokens_by_cnt(min_cnt=10)
     # filtered_num = unfiltered_vocab_size - vocab.size()
     # logger.info('After filter {} tokens, the final vocab size is {}'.format(filtered_num,
     #                                                                         vocab.size()))
@@ -153,7 +165,9 @@ def prepare(args):
 
     logger.info('Saving vocab...')
     # with open(os.path.join(args.vocab_dir, 'vocab.data'), 'wb') as fout:
-    with open(args.vocab_path, 'wb') as fout:  # 不区分search&zhidao
+    # with gzip.open(args.vocab_path, 'wb') as fout:  # 不区分search&zhidao
+    #     pickle.dump(vocab, fout, protocol=pickle.HIGHEST_PROTOCOL)
+    with gzip.open(args.vocab_path, "wb") as fout:
         pickle.dump(vocab, fout)
 
     logger.info('Done with preparing!')
@@ -166,8 +180,14 @@ def train(args):
     logger = logging.getLogger("brc")
     logger.info('Load data_set and vocab...')
     # with open(os.path.join(args.vocab_dir, 'vocab.data'), 'rb') as fin:
-    with open(args.vocab_path, 'rb') as fin:
-        vocab = pickle.load(fin)
+    # with gzip.open(args.vocab_path, 'rb') as fin:
+    #     vocab = pickle.load(fin)
+    # 是否是因为词表不一致的问题？
+    vocab = Vocab(lower=True, filename=args.vocab_path)
+    # vocab.randomly_init_embeddings(args.embed_size)
+    vocab.load_pretrained_embeddings(args.embedding_path)
+    logger.info("Vocab size is {} from {}".format(vocab.size(), args.vocab_path))
+
     brc_data = BRCDataset(args.max_p_num, args.max_p_len, args.max_q_len, args.accu_passage_path,
                           args.train_files, args.dev_files)
     logger.info('Converting text into ids...')
@@ -190,9 +210,14 @@ def evaluate(args):
     logger = logging.getLogger("brc")
     logger.info('Load data_set and vocab...')
     # with open(os.path.join(args.vocab_dir, 'vocab.data'), 'rb') as fin:
-    with open(args.vocab_path, 'rb') as fin:
-        vocab = pickle.load(fin)
-    assert len(args.dev_files) > 0, 'No dev files are provided.'
+    # with gzip.open(args.vocab_path, 'rb') as fin:
+    #     vocab = pickle.load(fin)
+    # assert len(args.dev_files) > 0, 'No dev files are provided.'
+    vocab = Vocab(lower=True, filename=args.vocab_path)
+    # vocab.randomly_init_embeddings(args.embed_size)
+    vocab.load_pretrained_embeddings(args.embedding_path)
+    logger.info("Vocab size is {} from {}".format(vocab.size(), args.vocab_path))
+    
     brc_data = BRCDataset(args.max_p_num, args.max_p_len, args.max_q_len, args.accu_passage_path, dev_files=args.dev_files)
     logger.info('Converting text into ids...')
     brc_data.convert_to_ids(vocab)
@@ -202,10 +227,10 @@ def evaluate(args):
     logger.info('Evaluating the model on dev set...')
     dev_batches = brc_data.gen_mini_batches('dev', args.batch_size,
                                             pad_id=vocab.get_id(vocab.pad_token), shuffle=False)
-    dev_loss, dev_bleu_rouge = rc_model.evaluate(
+    dev_loss, fscore = rc_model.evaluate(
         dev_batches, result_dir=args.result_dir, result_prefix='dev.predicted')
     logger.info('Loss on dev set: {}'.format(dev_loss))
-    logger.info('Result on dev set: {}'.format(dev_bleu_rouge))
+    logger.info('Result on dev set  fscore:{}'.format(fscore[0]))
     logger.info('Predicted answers are saved to {}'.format(os.path.join(args.result_dir)))
 
 
@@ -216,12 +241,17 @@ def predict(args):
     logger = logging.getLogger("brc")
     logger.info('Load data_set and vocab...')
     # with open(os.path.join(args.vocab_dir, 'vocab.data'), 'rb') as fin:
-    with open(args.vocab_path, 'rb') as fin:
-        vocab = pickle.load(fin)
-    assert len(args.test_files) > 0, 'No test files are provided.'
+    # with open(args.vocab_path, 'rb') as fin:
+    #     vocab = pickle.load(fin)
+    # assert len(args.test_files) > 0, 'No test files are provided.'
+    vocab = Vocab(lower=True, filename=args.vocab_path)
+    vocab.load_pretrained_embeddings(args.embedding_path)
+    # vocab.randomly_init_embeddings(args.embed_size)
+    logger.info("Vocab size is {} from {}".format(vocab.size(), args.vocab_path))
     brc_data = BRCDataset(args.max_p_num, args.max_p_len, args.max_q_len,  args.accu_passage_path,
                           test_files=args.test_files)
     logger.info('Converting text into ids...')
+
     brc_data.convert_to_ids(vocab)
     logger.info('Restoring the model...')
     rc_model = RCModel(vocab, args)
@@ -229,8 +259,11 @@ def predict(args):
     logger.info('Predicting answers for test set...')
     test_batches = brc_data.gen_mini_batches('test', args.batch_size,
                                              pad_id=vocab.get_id(vocab.pad_token), shuffle=False)
-    rc_model.evaluate(test_batches,
+    test_loss, fscore = rc_model.evaluate(test_batches,
                       result_dir=args.result_dir, result_prefix='test.predicted.428')
+    logger.info('Loss on test set: {}'.format(test_loss))
+    logger.info("Dev eval result => accu_avg_f1:{} accu_macro_f1:{} accu_micro_f1:{}\n => articles_avg_f1:{} articles_macro_f1:{} articles_micro_f1:{} \n => imprisonment_score:{}".format(fscore[0][0], fscore[0][1], fscore[0][2], fscore[1][0], fscore[1][1], fscore[1][2], fscore[2]))
+    logger.info('Predicted answers are saved to {}'.format(os.path.join(args.result_dir)))
 
 
 def run():
@@ -279,6 +312,7 @@ def run():
         evaluate(args)
     if args.predict:
         predict(args)
+
 
 
 if __name__ == '__main__':
