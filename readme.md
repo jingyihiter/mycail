@@ -184,13 +184,19 @@ xgboost             0.71
 ## 三、我的解决方案
 ### 3.1 [BiDAF模型](https://github.com/jingyihiter/mycail/tree/master/mycail)应用于文本分类任务
 ![BiDAF+self attention模型](pic/BiDAF.png)
+#### 3.1.1 BiDAF+全连接网络+max-pooling用于罪名的分类[详情](https://github.com/jingyihiter/mycail/tree/master/mycail/tfcode/model_v0)
+#### 3.1.2 分类任务转成机器阅读理解任务[详情](https://github.com/jingyihiter/mycail/tree/master/mycail/tfcode/model_v1)
 
 ### 3.2 [文本分类模型](https://github.com/jingyihiter/mycail/tree/master/ai_law)
-textcnn
-dpcnn
-han
-c_gru
+- textcnn [textcnn](https://github.com/jingyihiter/mycail/blob/master/ai_law/HAN_train_textcnn.py)
+- dpcnn  [dpcnn](https://github.com/jingyihiter/mycail/blob/master/ai_law/HAN_train_dpcnn.py)
+- han [han](https://github.com/jingyihiter/mycail/blob/master/ai_law/HAN_train_han.py)
+- c_gru [c_gru](https://github.com/jingyihiter/mycail/blob/master/ai_law/HAN_train_cgru.py)
 
-
-
+## 参考
+1、[DuReader: a Chinese Machine Reading Comprehension Dataset from Real-world Applications](https://arxiv.org/abs/1711.05073)
+2、[https://github.com/baidu/DuReader](https://github.com/baidu/DuReader)
+3、[https://github.com/brightmart/ai_law](https://github.com/brightmart/ai_law)
+4、[https://github.com/thunlp/CAIL2018](https://github.com/thunlp/CAIL2018)
+5、[https://github.com/thunlp/CAIL](https://github.com/thunlp/CAIL)
 
