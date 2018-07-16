@@ -106,39 +106,91 @@
 
 竞赛组织方提供了一个开源的针对不同任务的基线系统（[LibSVM](https://github.com/thunlp/CAIL2018/tree/master/baseline)）。
 
-## FAQ
+## 线上python3.5系统环境
 
-### 0\. 有没有选手交流的平台？
+```
+Package             Version               
+------------------- ----------------------
+absl-py             0.2.0                 
+astor               0.6.2                 
+bleach              1.5.0                 
+boto                2.48.0                
+boto3               1.7.19                
+botocore            1.10.19               
+bz2file             0.98                  
+certifi             2018.4.16             
+chardet             3.0.4                 
+cycler              0.10.0                
+Cython              0.28.2                
+docutils            0.14                  
+fasttext            0.8.3                 
+future              0.16.0                
+gast                0.2.0                 
+gensim              3.4.0                 
+grpcio              1.11.0                
+h5py                2.7.1                 
+html5lib            0.9999999             
+idna                2.6                   
+jieba               0.39                  
+jmespath            0.9.3                 
+JPype1              0.6.3                 
+Keras               2.1.6                 
+kiwisolver          1.0.1                 
+lightgbm            2.1.1                 
+Mako                1.0.7                 
+Markdown            2.6.11                
+MarkupSafe          1.0                   
+matplotlib          2.2.2                 
+numpy               1.14.3                
+pandas              0.22.0                
+Pillow              5.1.0                 
+pip                 10.0.1                
+protobuf            3.5.2.post1           
+pycurl              7.43.0                
+pygobject           3.20.0                
+pygpu               0.7.6                 
+pyhanlp             0.1.41                
+pyltp               0.2.1                 
+pyparsing           2.2.0                 
+python-apt          1.1.0b1+ubuntu0.16.4.1        
+pytz                2018.4                
+PyYAML              3.12                  
+requests            2.18.4                
+s3transfer          0.1.13                
+scikit-learn        0.19.1                
+scikit-multilearn   0.0.5                 
+scipy               1.1.0                 
+seq2seq             0.1.5                 
+setuptools          39.0.1                
+six                 1.11.0                
+sklearn             0.0                   
+smart-open          1.5.7                 
+tensorboard         1.7.0                 
+tensorflow-gpu      1.7.0                 
+termcolor           1.1.0                 
+tflearn             0.3.2                 
+Theano              1.0.1                 
+thulac              0.1.2                 
+torch               0.3.1                 
+torchtext           0.2.3                 
+torchvision         0.2.0                 
+tqdm                4.23.3                
+unattended-upgrades 0.1                   
+urllib3             1.22                  
+Werkzeug            0.14.1                
+wheel               0.31.0                
+xgboost             0.71
+```
+## 三、我的解决方案
+### 3.1 [BiDAF模型](https://github.com/jingyihiter/mycail/tree/master/mycail)应用于文本分类任务
+![BiDAF+self attention模型](pic/BiDAF.png)
 
-选手交流QQ群：237633234。
+### 3.2 [文本分类模型](https://github.com/jingyihiter/mycail/tree/master/ai_law)
+textcnn
+dpcnn
+han
+c_gru
 
-### 1\. 评测是否需要上传代码？
 
-代码上传不是必须的，我们不会保存选手上传的任何文件。
 
-选手上传的模型和文件应按照[代码提交说明](https://github.com/thunlp/CAIL2018)进行上传，只需符合要求并可以进行正常评测即可。
 
-### 2\. 上传后测试机的环境是怎么样的，如是否有相应的python包，是否有gpu，各个软件和第三方库的版本信息等。是否允许选手提出增加第三方依赖的需求？
-
-我们主要支持python3.5的编译环境，有GPU（Tesla P100 16G）。如果需要C++（服务器版本为5.4.0）或者Java（服务器版本为1.8.0_171），可以参考[代码提交说明](https://github.com/thunlp/CAIL2018)进行编译上传。
-
-现有python3.5环境可以参考[python环境列表](https://github.com/thunlp/CAIL2018#现有python3.5系统环境)。
-
-如果有其他需要的环境，请联系比赛管理员进行安装。
-
-### 3\. 上传代码后是否有测试时间限制？
-
-原则上没有评测时间限制，但如果我们发现选手的程序4小时没有输出结果，会手动终止，并与选手联系。
-
-### 4\. 上传代码以及其他文件是否有大小限制，如本地训练好的模型可能很大？
-
-通过网站上传代码和模型的文件大小限制为1GB，一般来说正常的模型不会超过1GB。
-如果需要上传更大的模型或者代码，请联系比赛管理人员进行沟通。
-
-### 5\. 比赛是否允许用外部数据？
-
-如需使用外部数据，可以在上传文件时同时进行。需要注意的是评测环境为禁止网络连接。
-
-### 6\. 是否允许人手工构建的一些知识性数据？
-
-我们欢迎选手使用各种方式来解决本次比赛的任务，进而不会对使用的方法进行任何限制。
