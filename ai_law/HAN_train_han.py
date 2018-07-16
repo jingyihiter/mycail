@@ -1,5 +1,5 @@
 """
-用于训练dpcnn在大数据集上的结果
+用于训练han在大数据集上的结果
 """
 import tensorflow as tf
 import numpy as np

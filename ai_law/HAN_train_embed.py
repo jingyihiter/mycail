@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-#training the model.
-#process--->1.load data(X:list of lint,y:int). 2.create session. 3.feed data. 4.training (5.validation) ,(6.prediction)
+# textcnn 应用新的embed300维
 #import sys
 #reload(sys)
 #sys.setdefaultencoding('utf8')
