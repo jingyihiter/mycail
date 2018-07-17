@@ -1,4 +1,4 @@
-# "中国法研杯"司法人工智能挑战赛数据说明
+# "中国法研杯"司法人工智能挑战赛
 
 ## 一、简介
 
@@ -106,6 +106,19 @@
 
 竞赛组织方提供了一个开源的针对不同任务的基线系统（[LibSVM](https://github.com/thunlp/CAIL2018/tree/master/baseline)）。
 
+
+## 三、我的解决方案
+### 3.1 [BiDAF模型](https://github.com/jingyihiter/mycail/tree/master/mycail)应用于文本分类任务
+![BiDAF+self attention模型](pic/BiDAF.png)
+#### 3.1.1 BiDAF+全连接网络+max-pooling用于罪名的分类[详情](https://github.com/jingyihiter/mycail/tree/master/mycail/tfcode/model_v0)
+#### 3.1.2 分类任务转成机器阅读理解任务[详情](https://github.com/jingyihiter/mycail/tree/master/mycail/tfcode/model_v1)
+
+### 3.2 [文本分类模型](https://github.com/jingyihiter/mycail/tree/master/ai_law)
+- TextCNN [textcnn](https://github.com/jingyihiter/mycail/blob/master/ai_law/HAN_train_textcnn.py)
+- Deep Pyramid CNN  [dpcnn](https://github.com/jingyihiter/mycail/blob/master/ai_law/HAN_train_dpcnn.py)
+- Hierarchical Attention Network [han](https://github.com/jingyihiter/mycail/blob/master/ai_law/HAN_train_han.py)
+- c_GRU [c_gru](https://github.com/jingyihiter/mycail/blob/master/ai_law/HAN_train_cgru.py)
+
 ## 线上python3.5系统环境
 
 ```
@@ -181,18 +194,6 @@ Werkzeug            0.14.1
 wheel               0.31.0                
 xgboost             0.71
 ```
-## 三、我的解决方案
-### 3.1 [BiDAF模型](https://github.com/jingyihiter/mycail/tree/master/mycail)应用于文本分类任务
-![BiDAF+self attention模型](pic/BiDAF.png)
-#### 3.1.1 BiDAF+全连接网络+max-pooling用于罪名的分类[详情](https://github.com/jingyihiter/mycail/tree/master/mycail/tfcode/model_v0)
-#### 3.1.2 分类任务转成机器阅读理解任务[详情](https://github.com/jingyihiter/mycail/tree/master/mycail/tfcode/model_v1)
-
-### 3.2 [文本分类模型](https://github.com/jingyihiter/mycail/tree/master/ai_law)
-- TextCNN [textcnn](https://github.com/jingyihiter/mycail/blob/master/ai_law/HAN_train_textcnn.py)
-- Deep Pyramid CNN  [dpcnn](https://github.com/jingyihiter/mycail/blob/master/ai_law/HAN_train_dpcnn.py)
-- Hierarchical Attention Network [han](https://github.com/jingyihiter/mycail/blob/master/ai_law/HAN_train_han.py)
-- c_GRU [c_gru](https://github.com/jingyihiter/mycail/blob/master/ai_law/HAN_train_cgru.py)
-
 ## 参考
 1. [DuReader: a Chinese Machine Reading Comprehension Dataset from Real-world Applications](https://arxiv.org/abs/1711.05073)
 2. [https://github.com/baidu/DuReader](https://github.com/baidu/DuReader)
